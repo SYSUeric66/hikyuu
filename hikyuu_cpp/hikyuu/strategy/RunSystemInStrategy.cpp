@@ -75,7 +75,9 @@ StrategyPtr HKU_API crtSysStrategy(const SYSPtr& sys, const string& stk_market_c
         }
     }
 
-    std::function<void()> func = [=]() { runner->run(getStock(stk_market_code)); };
+    std::function<void(const Strategy*)> func = [=](const Strategy*) {
+        runner->run(getStock(stk_market_code));
+    };
 
     KQuery::KType ktype = query.kType();
     StrategyPtr stg = std::make_shared<Strategy>(vector<string>{stk_market_code, "SH000001"},

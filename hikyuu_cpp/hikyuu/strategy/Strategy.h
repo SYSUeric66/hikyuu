@@ -62,7 +62,7 @@ public:
      * @param market 指定的市场
      * @param ignoreMarket 是否忽略市场时间限制，如为 true，则为定时循环不受开闭市时间限制
      */
-    void runDaily(std::function<void()>&& func, const TimeDelta& delta,
+    void runDaily(std::function<void(const Strategy*)>&& func, const TimeDelta& delta,
                   const std::string& market = "SH", bool ignoreMarket = false);
 
     /**
@@ -71,7 +71,7 @@ public:
      * @param delta 指定时刻
      * @param ignoreHoliday 忽略节假日，即节假日不执行
      */
-    void runDailyAt(std::function<void()>&& func, const TimeDelta& delta,
+    void runDailyAt(std::function<void(const Strategy*)>&& func, const TimeDelta& delta,
                     bool ignoreHoliday = true);
 
     /**
@@ -79,7 +79,8 @@ public:
      * @note 通常用于调试。且只要收到行情采集消息就会触发，不受开、闭市时间限制
      * @param changeFunc 回调函数
      */
-    void onChange(std::function<void(const Stock&, const SpotRecord& spot)>&& changeFunc);
+    void onChange(
+      std::function<void(const Strategy*, const Stock&, const SpotRecord& spot)>&& changeFunc);
 
     /**
      * 一批行情数据接受完毕后通知
@@ -87,19 +88,43 @@ public:
      *       且只要收到行情采集消息就会触发，不受开、闭市时间限制。
      * @param recievedFucn 回调函数
      */
-    void onReceivedSpot(std::function<void(const Datetime&)>&& recievedFucn);
+    void onReceivedSpot(std::function<void(const Strategy*, const Datetime&)>&& recievedFucn);
 
     /**
      * 启动策略执行，必须在已注册相关处理函数后执行
      */
     void start(bool autoRecieveSpot = true);
 
+    /**
+     * @brief 事件驱动回测（仅支持 bar 级别)
+     *
+     * @param on_bar 按指定周期被执行的回调函数
+     * @param ktype 回测周期
+     */
+    void backtest(std::function<void()>&& on_bar, const KQuery::KType& ktype,
+                  const Datetime& start_date, const Datetime& end_date,
+                  const string& ref_market = "SH");
+
+    Datetime today() const;
+    Datetime now() const;
+    Datetime nextDatetime() const;
+    KData getKData(const Stock& stk, const Datetime& start_date, const Datetime& end_date,
+                   const KQuery::KType& ktype,
+                   const KQuery::RecoverType& recover_type = KQuery::NO_RECOVER) const;
+    KData getLastKData(const Stock& stk, const Datetime& start_date, const KQuery::KType& ktype,
+                       const KQuery::RecoverType& recover_type = KQuery::NO_RECOVER) const {
+        return getKData(stk, start_date, Null<Datetime>(), ktype, recover_type);
+    }
+
+    KData getLastKData(const Stock& stk, size_t lastnum, const KQuery::KType& ktype,
+                       const KQuery::RecoverType& recover_type = KQuery::NO_RECOVER) const;
+
 private:
     string m_name;
     string m_config_file;
     StrategyContext m_context;
-    std::function<void(const Datetime&)> m_on_recieved_spot;
-    std::function<void(const Stock&, const SpotRecord& spot)> m_on_change;
+    std::function<void(const Strategy*, const Datetime&)> m_on_recieved_spot;
+    std::function<void(const Strategy*, const Stock&, const SpotRecord& spot)> m_on_change;
 
     std::function<void()> m_run_daily_func;
     TimeDelta m_run_daily_delta;
@@ -122,6 +147,11 @@ private:
     typedef FuncWrapper event_type;
     ThreadSafeQueue<event_type> m_event_queue;  // 消息队列
 
+    bool m_backtesting{false};
+    Datetime m_backtesting_now;
+    TimeDelta m_backtesting_minutes;
+
+private:
     /** 先消息队列提交任务后返回的对应 future 的类型 */
     template <typename ResultType>
     using event_handle = std::future<ResultType>;

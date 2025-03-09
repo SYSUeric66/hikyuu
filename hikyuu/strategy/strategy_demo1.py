@@ -19,11 +19,11 @@ def on_spot(rev_time):
     print("[on_received_spot] rev_time:", rev_time)
 
 
-def my_func1():
+def my_func1(stg):
     print("[my_func1]", str(Datetime.now()))
 
 
-def my_func2():
+def my_func2(stg):
     print("[my_func2] calculate:", Datetime.now())
     for s in sm:
         print(s)

@@ -23,22 +23,22 @@
 
 using namespace hku;
 
-static void changed(const Stock& stk, const SpotRecord& spot) {
+static void changed(const Strategy* stg, const Stock& stk, const SpotRecord& spot) {
     HKU_INFO("{} {} 当前收盘价: {}", stk.market_code(), stk.name(), spot.close);
 }
 
-static void changed2(const Stock& stk, const SpotRecord& spot) {
+static void changed2(const Strategy* stg, const Stock& stk, const SpotRecord& spot) {
     if (stk.market_code() == "SZ000001") {
         HKU_INFO("strategy 2 process sz000001");
     }
 }
 
-static void my_process1() {
+static void my_process1(const Strategy* stg) {
     HKU_INFO("{}", getStock("sh000001"));
 }
 
-static void my_process2() {
-    HKU_INFO("run at time: {} {}", Datetime::now(), getStock("sh000001").name());
+static void my_process2(const Strategy* stg) {
+    HKU_INFO("run at time: {} {}", stg->now(), getStock("sh000001").name());
 }
 
 int main(int argc, char* argv[]) {
@@ -61,7 +61,7 @@ int main(int argc, char* argv[]) {
     stg.runDaily(my_process1, Minutes(1));
 
     // 每日定点执行
-    stg.runDailyAt(my_process2, Datetime::now() - Datetime::today() + Seconds(20));
+    stg.runDailyAt(my_process2, Datetime::now() - Datetime::today() + Seconds(10), false);
 
     auto t = std::thread([context]() {
         Strategy stg2(context, "stratege2");

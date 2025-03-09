@@ -55,9 +55,9 @@ void export_Strategy(py::module& m) {
         [](Strategy& self, py::object func) {
             HKU_CHECK(py::hasattr(func, "__call__"), "func is not callable!");
             py::object c_func = func.attr("__call__");
-            auto new_func = [=](const Stock& stk, const SpotRecord& spot) {
+            auto new_func = [=](const Strategy* stg, const Stock& stk, const SpotRecord& spot) {
                 try {
-                    c_func(stk, spot);
+                    c_func(stg, stk, spot);
                 } catch (py::error_already_set& e) {
                     if (e.matches(PyExc_KeyboardInterrupt)) {
                         HKU_INFO("KeyboardInterrupt");
@@ -82,9 +82,9 @@ void export_Strategy(py::module& m) {
         [](Strategy& self, py::object func) {
             HKU_CHECK(py::hasattr(func, "__call__"), "func is not callable!");
             py::object c_func = func.attr("__call__");
-            auto new_func = [=](Datetime revTime) {
+            auto new_func = [=](const Strategy* stg, Datetime revTime) {
                 try {
-                    c_func(revTime);
+                    c_func(stg, revTime);
                 } catch (py::error_already_set& e) {
                     if (e.matches(PyExc_KeyboardInterrupt)) {
                         HKU_INFO("KeyboardInterrupt");
@@ -106,13 +106,13 @@ void export_Strategy(py::module& m) {
 
       .def(
         "run_daily",
-        [](Strategy& self, py::object func, const TimeDelta& time, std::string market,
+        [](Strategy* self, py::object func, const TimeDelta& time, std::string market,
            bool ignore_market) {
             HKU_CHECK(py::hasattr(func, "__call__"), "func is not callable!");
             py::object c_func = func.attr("__call__");
-            auto new_func = [=]() {
+            auto new_func = [=](const Strategy* stg) {
                 try {
-                    c_func();
+                    c_func(stg);
                 } catch (py::error_already_set& e) {
                     if (e.matches(PyExc_KeyboardInterrupt)) {
                         HKU_INFO("KeyboardInterrupt");
@@ -124,7 +124,7 @@ void export_Strategy(py::module& m) {
                     HKU_ERROR("Unknown error!");
                 }
             };
-            self.runDaily(new_func, time, market, ignore_market);
+            self->runDaily(new_func, time, market, ignore_market);
         },
         py::arg("func"), py::arg("time"), py::arg("market") = "SH",
         py::arg("ignore_market") = false, R"(run_daily(self, func)
@@ -139,12 +139,12 @@ void export_Strategy(py::module& m) {
 
       .def(
         "run_daily_at",
-        [](Strategy& self, py::object func, const TimeDelta& time, bool ignore_holiday) {
+        [](Strategy* self, py::object func, const TimeDelta& time, bool ignore_holiday) {
             HKU_CHECK(py::hasattr(func, "__call__"), "func is not callable!");
             py::object c_func = func.attr("__call__");
-            auto new_func = [=]() {
+            auto new_func = [=](const Strategy* stg) {
                 try {
-                    c_func();
+                    c_func(stg);
                 } catch (py::error_already_set& e) {
                     if (e.matches(PyExc_KeyboardInterrupt)) {
                         HKU_INFO("KeyboardInterrupt");
@@ -156,7 +156,7 @@ void export_Strategy(py::module& m) {
                     HKU_ERROR("Unknown error!");
                 }
             };
-            self.runDailyAt(new_func, time, ignore_holiday);
+            self->runDailyAt(new_func, time, ignore_holiday);
         },
         py::arg("func"), py::arg("time"), py::arg("ignore_holiday") = true,
         R"(run_daily_at(self, func)

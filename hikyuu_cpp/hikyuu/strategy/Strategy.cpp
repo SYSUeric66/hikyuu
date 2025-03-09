@@ -29,9 +29,7 @@ void Strategy::sig_handler(int sig) {
     }
 }
 
-Strategy::Strategy() : Strategy("Strategy", "") {
-    _initParam();
-}
+Strategy::Strategy() : Strategy("Strategy", "") {}
 
 Strategy::Strategy(const string& name, const string& config_file)
 : m_name(name), m_config_file(config_file) {
@@ -63,7 +61,7 @@ Strategy::Strategy(const StrategyContext& context, const string& name, const str
 
 Strategy::~Strategy() {
     ms_keep_running = false;
-    CLS_INFO("Quit Strategy {}!", m_name);
+    event([]() {});
 }
 
 void Strategy::_initParam() {
@@ -125,7 +123,7 @@ void Strategy::start(bool autoRecieveSpot) {
         agent.addProcess([this](const SpotRecord& spot) { _receivedSpot(spot); });
         agent.addPostProcess([this](Datetime revTime) {
             if (m_on_recieved_spot) {
-                event([this, revTime]() { m_on_recieved_spot(revTime); });
+                event([this, revTime]() { m_on_recieved_spot(this, revTime); });
             }
         });
         startSpotAgent(true, getParam<int>("spot_worker_num"),
@@ -138,12 +136,91 @@ void Strategy::start(bool autoRecieveSpot) {
     _startEventLoop();
 }
 
-void Strategy::onChange(std::function<void(const Stock&, const SpotRecord& spot)>&& changeFunc) {
+void Strategy::backtest(std::function<void()>&& on_bar, const KQuery::KType& ktype,
+                        const Datetime& start_date, const Datetime& end_date,
+                        const string& ref_market) {
+    m_backtesting = true;
+    _init();
+
+    std::function<void()> process = std::move(on_bar);
+
+    try {
+        StockManager& sm = StockManager::instance();
+        auto dats = sm.getTradingCalendar(KQueryByDate(start_date, end_date, ktype), ref_market);
+
+        m_backtesting_minutes = Minutes(KQuery::getKTypeInMin(ktype));
+        auto dates = getDateRange(start_date, end_date);
+        for (const auto& date : dates) {
+            if (!ms_keep_running) {
+                break;
+            }
+            m_backtesting_now = date;
+            process();
+        }
+    } catch (const std::exception& e) {
+        CLS_ERROR("{}", e.what());
+    } catch (...) {
+        CLS_ERROR("Unknown exception!");
+    }
+
+    m_backtesting_now = Null<Datetime>();
+    m_backtesting = false;
+}
+
+Datetime Strategy::today() const {
+    return m_backtesting ? m_backtesting_now.startOfDay() : Datetime::today();
+}
+
+Datetime Strategy::now() const {
+    return m_backtesting ? m_backtesting_now : Datetime::now();
+}
+
+Datetime Strategy::nextDatetime() const {
+    return m_backtesting ? m_backtesting_now + m_backtesting_minutes : Null<Datetime>();
+}
+
+KData Strategy::getKData(const Stock& stk, const Datetime& start_date, const Datetime& end_date,
+                         const KQuery::KType& ktype,
+                         const KQuery::RecoverType& recover_type) const {
+    KData ret;
+    if (!m_backtesting) {
+        ret = stk.getKData(KQueryByDate(start_date, end_date, ktype, recover_type));
+        return ret;
+    }
+
+    Datetime next_date = m_backtesting_now + m_backtesting_minutes;
+    if (end_date.isNull() || end_date > next_date) {
+        ret = stk.getKData(KQueryByDate(start_date, next_date, ktype, recover_type));
+    } else {
+        ret = stk.getKData(KQueryByDate(start_date, end_date, ktype, recover_type));
+    }
+    return ret;
+}
+
+KData Strategy::getLastKData(const Stock& stk, size_t lastnum, const KQuery::KType& ktype,
+                             const KQuery::RecoverType& recover_type) const {
+    KData ret;
+    KQuery query = KQueryByDate(Datetime::min(), nextDatetime(), ktype);
+    size_t out_start = 0, out_end = 0;
+    HKU_IF_RETURN(!stk.getIndexRange(query, out_start, out_end), ret);
+
+    int64_t startidx = 0, endidx = 0;
+    endidx = out_end;
+    startidx = (endidx > lastnum) ? endidx - lastnum : out_start;
+
+    query = KQueryByIndex(startidx, endidx, ktype, recover_type);
+    ret = stk.getKData(query);
+    return ret;
+}
+
+void Strategy::onChange(
+  std::function<void(const Strategy*, const Stock&, const SpotRecord& spot)>&& changeFunc) {
     HKU_CHECK(changeFunc, "Invalid changeFunc!");
     m_on_change = std::move(changeFunc);
 }
 
-void Strategy::onReceivedSpot(std::function<void(const Datetime&)>&& recievedFucn) {
+void Strategy::onReceivedSpot(
+  std::function<void(const Strategy*, const Datetime&)>&& recievedFucn) {
     HKU_CHECK(recievedFucn, "Invalid recievedFucn!");
     m_on_recieved_spot = std::move(recievedFucn);
 }
@@ -152,12 +229,12 @@ void Strategy::_receivedSpot(const SpotRecord& spot) {
     Stock stk = getStock(format("{}{}", spot.market, spot.code));
     if (!stk.isNull()) {
         if (m_on_change) {
-            event([this, stk, spot]() { m_on_change(stk, spot); });
+            event([this, stk, spot]() { m_on_change(this, stk, spot); });
         }
     }
 }
 
-void Strategy::runDaily(std::function<void()>&& func, const TimeDelta& delta,
+void Strategy::runDaily(std::function<void(const Strategy*)>&& func, const TimeDelta& delta,
                         const std::string& market, bool ignoreMarket) {
     HKU_CHECK(func, "Invalid func!");
     m_run_daily_delta = delta;
@@ -165,7 +242,7 @@ void Strategy::runDaily(std::function<void()>&& func, const TimeDelta& delta,
     m_ignoreMarket = ignoreMarket;
 
     if (ignoreMarket) {
-        m_run_daily_func = [this, f = std::move(func)]() { event(f); };
+        m_run_daily_func = [this, f = std::move(func)]() { event([this, f]() { f(this); }); };
 
     } else {
         m_run_daily_func = [this, f = std::move(func)]() {
@@ -183,7 +260,7 @@ void Strategy::runDaily(std::function<void()>&& func, const TimeDelta& delta,
             Datetime close2 = today + market_info.closeTime2();
             Datetime now = Datetime::now();
             if ((now >= open1 && now <= close1) || (now >= open2 && now <= close2)) {
-                event(f);
+                event([this, f]() { f(this); });
             }
         };
     }
@@ -269,7 +346,7 @@ void Strategy::_runDaily() {
     }
 }
 
-void Strategy::runDailyAt(std::function<void()>&& func, const TimeDelta& delta,
+void Strategy::runDailyAt(std::function<void(const Strategy*)>&& func, const TimeDelta& delta,
                           bool ignoreHoliday) {
     HKU_CHECK(func, "Invalid func!");
     HKU_CHECK(delta < Days(1), "TimeDelta must < Days(1)!");
@@ -283,12 +360,12 @@ void Strategy::runDailyAt(std::function<void()>&& func, const TimeDelta& delta,
             auto today = Datetime::today();
             int day = today.dayOfWeek();
             if (day != 0 && day != 6 && !sm.isHoliday(today)) {
-                event(f);
+                event([this, f]() { f(this); });
             }
         };
 
     } else {
-        new_func = [this, f = std::move(func)]() { event(f); };
+        new_func = [this, f = std::move(func)]() { event([this, f]() { f(this); }); };
     }
 
     m_run_daily_at_funcs[delta] = new_func;
