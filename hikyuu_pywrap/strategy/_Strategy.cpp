@@ -55,12 +55,12 @@ void export_Strategy(py::module& m) {
         [](Strategy& self, py::object func) {
             HKU_CHECK(py::hasattr(func, "__call__"), "func is not callable!");
             py::object c_func = func.attr("__call__");
-            auto new_func = [=](const Strategy* stg, const Stock& stk, const SpotRecord& spot) {
+            auto new_func = [=](const Strategy& stg, const Stock& stk, const SpotRecord& spot) {
                 try {
                     c_func(stg, stk, spot);
                 } catch (py::error_already_set& e) {
                     if (e.matches(PyExc_KeyboardInterrupt)) {
-                        HKU_INFO("KeyboardInterrupt");
+                        printf("KeyboardInterrupt\n");
                         raise(SIGTERM);
                     }
                 } catch (const std::exception& e) {
@@ -82,12 +82,12 @@ void export_Strategy(py::module& m) {
         [](Strategy& self, py::object func) {
             HKU_CHECK(py::hasattr(func, "__call__"), "func is not callable!");
             py::object c_func = func.attr("__call__");
-            auto new_func = [=](const Strategy* stg, Datetime revTime) {
+            auto new_func = [=](const Strategy& stg, Datetime revTime) {
                 try {
                     c_func(stg, revTime);
                 } catch (py::error_already_set& e) {
                     if (e.matches(PyExc_KeyboardInterrupt)) {
-                        HKU_INFO("KeyboardInterrupt");
+                        printf("KeyboardInterrupt\n");
                         raise(SIGTERM);
                     }
                 } catch (const std::exception& e) {
@@ -110,12 +110,12 @@ void export_Strategy(py::module& m) {
            bool ignore_market) {
             HKU_CHECK(py::hasattr(func, "__call__"), "func is not callable!");
             py::object c_func = func.attr("__call__");
-            auto new_func = [=](const Strategy* stg) {
+            auto new_func = [=](const Strategy& stg) {
                 try {
                     c_func(stg);
                 } catch (py::error_already_set& e) {
                     if (e.matches(PyExc_KeyboardInterrupt)) {
-                        HKU_INFO("KeyboardInterrupt");
+                        printf("KeyboardInterrupt\n");
                         raise(SIGTERM);
                     }
                 } catch (const std::exception& e) {
@@ -142,12 +142,12 @@ void export_Strategy(py::module& m) {
         [](Strategy* self, py::object func, const TimeDelta& time, bool ignore_holiday) {
             HKU_CHECK(py::hasattr(func, "__call__"), "func is not callable!");
             py::object c_func = func.attr("__call__");
-            auto new_func = [=](const Strategy* stg) {
+            auto new_func = [=](const Strategy& stg) {
                 try {
                     c_func(stg);
                 } catch (py::error_already_set& e) {
                     if (e.matches(PyExc_KeyboardInterrupt)) {
-                        HKU_INFO("KeyboardInterrupt");
+                        printf("KeyboardInterrupt\n");
                         raise(SIGTERM);
                     }
                 } catch (const std::exception& e) {

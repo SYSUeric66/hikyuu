@@ -11,20 +11,20 @@ from hikyuu import Strategy, Query, Datetime, Seconds, Minutes
 from hikyuu import sm
 
 
-def on_change(stk, spot):
+def on_change(stg, stk, spot):
     print("[on_change]:", stk.market_code, stk.name, spot.close, spot.bid1, spot.ask1)
 
 
-def on_spot(rev_time):
+def on_spot(stg, rev_time):
     print("[on_received_spot] rev_time:", rev_time)
 
 
 def my_func1(stg):
-    print("[my_func1]", str(Datetime.now()))
+    print("[my_func1]", str(stg.now()))
 
 
 def my_func2(stg):
-    print("[my_func2] calculate:", Datetime.now())
+    print("[my_func2] calculate:", stg.now())
     for s in sm:
         print(s)
 

@@ -62,7 +62,7 @@ public:
      * @param market 指定的市场
      * @param ignoreMarket 是否忽略市场时间限制，如为 true，则为定时循环不受开闭市时间限制
      */
-    void runDaily(std::function<void(const Strategy*)>&& func, const TimeDelta& delta,
+    void runDaily(std::function<void(const Strategy&)>&& func, const TimeDelta& delta,
                   const std::string& market = "SH", bool ignoreMarket = false);
 
     /**
@@ -71,7 +71,7 @@ public:
      * @param delta 指定时刻
      * @param ignoreHoliday 忽略节假日，即节假日不执行
      */
-    void runDailyAt(std::function<void(const Strategy*)>&& func, const TimeDelta& delta,
+    void runDailyAt(std::function<void(const Strategy&)>&& func, const TimeDelta& delta,
                     bool ignoreHoliday = true);
 
     /**
@@ -80,7 +80,7 @@ public:
      * @param changeFunc 回调函数
      */
     void onChange(
-      std::function<void(const Strategy*, const Stock&, const SpotRecord& spot)>&& changeFunc);
+      std::function<void(const Strategy&, const Stock&, const SpotRecord& spot)>&& changeFunc);
 
     /**
      * 一批行情数据接受完毕后通知
@@ -88,7 +88,7 @@ public:
      *       且只要收到行情采集消息就会触发，不受开、闭市时间限制。
      * @param recievedFucn 回调函数
      */
-    void onReceivedSpot(std::function<void(const Strategy*, const Datetime&)>&& recievedFucn);
+    void onReceivedSpot(std::function<void(const Strategy&, const Datetime&)>&& recievedFucn);
 
     /**
      * 启动策略执行，必须在已注册相关处理函数后执行
@@ -123,8 +123,8 @@ private:
     string m_name;
     string m_config_file;
     StrategyContext m_context;
-    std::function<void(const Strategy*, const Datetime&)> m_on_recieved_spot;
-    std::function<void(const Strategy*, const Stock&, const SpotRecord& spot)> m_on_change;
+    std::function<void(const Strategy&, const Datetime&)> m_on_recieved_spot;
+    std::function<void(const Strategy&, const Stock&, const SpotRecord& spot)> m_on_change;
 
     std::function<void()> m_run_daily_func;
     TimeDelta m_run_daily_delta;

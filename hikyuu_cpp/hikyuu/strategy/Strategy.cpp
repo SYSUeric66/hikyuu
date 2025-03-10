@@ -83,7 +83,9 @@ void Strategy::_init() {
     // sm 尚未初始化，则初始化
     if (sm.thread_id() == std::thread::id()) {
         // 注册 ctrl-c 终止信号
-        std::signal(SIGINT, sig_handler);
+        if (!runningInPython()) {
+            std::signal(SIGINT, sig_handler);
+        }
 
         CLS_INFO("{} is running! You can press Ctrl-C to terminte ...", m_name);
 
@@ -123,7 +125,7 @@ void Strategy::start(bool autoRecieveSpot) {
         agent.addProcess([this](const SpotRecord& spot) { _receivedSpot(spot); });
         agent.addPostProcess([this](Datetime revTime) {
             if (m_on_recieved_spot) {
-                event([this, revTime]() { m_on_recieved_spot(this, revTime); });
+                event([this, revTime]() { m_on_recieved_spot(*this, revTime); });
             }
         });
         startSpotAgent(true, getParam<int>("spot_worker_num"),
@@ -206,7 +208,8 @@ KData Strategy::getLastKData(const Stock& stk, size_t lastnum, const KQuery::KTy
 
     int64_t startidx = 0, endidx = 0;
     endidx = out_end;
-    startidx = (endidx > lastnum) ? endidx - lastnum : out_start;
+    int64_t num = static_cast<int64_t>(lastnum);
+    startidx = (endidx > num) ? endidx - num : out_start;
 
     query = KQueryByIndex(startidx, endidx, ktype, recover_type);
     ret = stk.getKData(query);
@@ -214,13 +217,13 @@ KData Strategy::getLastKData(const Stock& stk, size_t lastnum, const KQuery::KTy
 }
 
 void Strategy::onChange(
-  std::function<void(const Strategy*, const Stock&, const SpotRecord& spot)>&& changeFunc) {
+  std::function<void(const Strategy&, const Stock&, const SpotRecord& spot)>&& changeFunc) {
     HKU_CHECK(changeFunc, "Invalid changeFunc!");
     m_on_change = std::move(changeFunc);
 }
 
 void Strategy::onReceivedSpot(
-  std::function<void(const Strategy*, const Datetime&)>&& recievedFucn) {
+  std::function<void(const Strategy&, const Datetime&)>&& recievedFucn) {
     HKU_CHECK(recievedFucn, "Invalid recievedFucn!");
     m_on_recieved_spot = std::move(recievedFucn);
 }
@@ -229,12 +232,12 @@ void Strategy::_receivedSpot(const SpotRecord& spot) {
     Stock stk = getStock(format("{}{}", spot.market, spot.code));
     if (!stk.isNull()) {
         if (m_on_change) {
-            event([this, stk, spot]() { m_on_change(this, stk, spot); });
+            event([this, stk, spot]() { m_on_change(*this, stk, spot); });
         }
     }
 }
 
-void Strategy::runDaily(std::function<void(const Strategy*)>&& func, const TimeDelta& delta,
+void Strategy::runDaily(std::function<void(const Strategy&)>&& func, const TimeDelta& delta,
                         const std::string& market, bool ignoreMarket) {
     HKU_CHECK(func, "Invalid func!");
     m_run_daily_delta = delta;
@@ -242,7 +245,7 @@ void Strategy::runDaily(std::function<void(const Strategy*)>&& func, const TimeD
     m_ignoreMarket = ignoreMarket;
 
     if (ignoreMarket) {
-        m_run_daily_func = [this, f = std::move(func)]() { event([this, f]() { f(this); }); };
+        m_run_daily_func = [this, f = std::move(func)]() { event([this, f]() { f(*this); }); };
 
     } else {
         m_run_daily_func = [this, f = std::move(func)]() {
@@ -260,7 +263,7 @@ void Strategy::runDaily(std::function<void(const Strategy*)>&& func, const TimeD
             Datetime close2 = today + market_info.closeTime2();
             Datetime now = Datetime::now();
             if ((now >= open1 && now <= close1) || (now >= open2 && now <= close2)) {
-                event([this, f]() { f(this); });
+                event([this, f]() { f(*this); });
             }
         };
     }
@@ -346,7 +349,7 @@ void Strategy::_runDaily() {
     }
 }
 
-void Strategy::runDailyAt(std::function<void(const Strategy*)>&& func, const TimeDelta& delta,
+void Strategy::runDailyAt(std::function<void(const Strategy&)>&& func, const TimeDelta& delta,
                           bool ignoreHoliday) {
     HKU_CHECK(func, "Invalid func!");
     HKU_CHECK(delta < Days(1), "TimeDelta must < Days(1)!");
@@ -360,12 +363,12 @@ void Strategy::runDailyAt(std::function<void(const Strategy*)>&& func, const Tim
             auto today = Datetime::today();
             int day = today.dayOfWeek();
             if (day != 0 && day != 6 && !sm.isHoliday(today)) {
-                event([this, f]() { f(this); });
+                event([this, f]() { f(*this); });
             }
         };
 
     } else {
-        new_func = [this, f = std::move(func)]() { event([this, f]() { f(this); }); };
+        new_func = [this, f = std::move(func)]() { event([this, f]() { f(*this); }); };
     }
 
     m_run_daily_at_funcs[delta] = new_func;
