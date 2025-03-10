@@ -142,13 +142,13 @@ void Strategy::start(bool autoRecieveSpot) {
     _startEventLoop();
 }
 
-void Strategy::backtest(std::function<void()>&& on_bar, const KQuery::KType& ktype,
-                        const Datetime& start_date, const Datetime& end_date,
+void Strategy::backtest(std::function<void(const Strategy&)>&& on_bar, const Datetime& start_date,
+                        const Datetime& end_date, const KQuery::KType& ktype,
                         const string& ref_market) {
     m_backtesting = true;
     _init();
 
-    std::function<void()> process = std::move(on_bar);
+    auto process = std::move(on_bar);
 
     try {
         StockManager& sm = StockManager::instance();
@@ -161,7 +161,7 @@ void Strategy::backtest(std::function<void()>&& on_bar, const KQuery::KType& kty
                 break;
             }
             m_backtesting_now = date;
-            process();
+            process(*this);
         }
     } catch (const std::exception& e) {
         CLS_ERROR("{}", e.what());
@@ -186,8 +186,7 @@ Datetime Strategy::nextDatetime() const {
 }
 
 KData Strategy::getKData(const Stock& stk, const Datetime& start_date, const Datetime& end_date,
-                         const KQuery::KType& ktype,
-                         const KQuery::RecoverType& recover_type) const {
+                         const KQuery::KType& ktype, KQuery::RecoverType recover_type) const {
     KData ret;
     if (!m_backtesting) {
         ret = stk.getKData(KQueryByDate(start_date, end_date, ktype, recover_type));
@@ -204,7 +203,7 @@ KData Strategy::getKData(const Stock& stk, const Datetime& start_date, const Dat
 }
 
 KData Strategy::getLastKData(const Stock& stk, size_t lastnum, const KQuery::KType& ktype,
-                             const KQuery::RecoverType& recover_type) const {
+                             KQuery::RecoverType recover_type) const {
     KData ret;
     KQuery query = KQueryByDate(Datetime::min(), nextDatetime(), ktype);
     size_t out_start = 0, out_end = 0;

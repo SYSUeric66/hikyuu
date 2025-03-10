@@ -101,8 +101,8 @@ public:
      * @param on_bar 按指定周期被执行的回调函数
      * @param ktype 回测周期
      */
-    void backtest(std::function<void()>&& on_bar, const KQuery::KType& ktype,
-                  const Datetime& start_date, const Datetime& end_date,
+    void backtest(std::function<void(const Strategy&)>&& on_bar, const Datetime& start_date,
+                  const Datetime& end_date, const KQuery::KType& ktype = KQuery::DAY,
                   const string& ref_market = "SH");
 
     Datetime today() const;
@@ -110,14 +110,14 @@ public:
     Datetime nextDatetime() const;
     KData getKData(const Stock& stk, const Datetime& start_date, const Datetime& end_date,
                    const KQuery::KType& ktype,
-                   const KQuery::RecoverType& recover_type = KQuery::NO_RECOVER) const;
+                   KQuery::RecoverType recover_type = KQuery::NO_RECOVER) const;
     KData getLastKData(const Stock& stk, const Datetime& start_date, const KQuery::KType& ktype,
-                       const KQuery::RecoverType& recover_type = KQuery::NO_RECOVER) const {
+                       KQuery::RecoverType recover_type = KQuery::NO_RECOVER) const {
         return getKData(stk, start_date, Null<Datetime>(), ktype, recover_type);
     }
 
     KData getLastKData(const Stock& stk, size_t lastnum, const KQuery::KType& ktype,
-                       const KQuery::RecoverType& recover_type = KQuery::NO_RECOVER) const;
+                       KQuery::RecoverType recover_type = KQuery::NO_RECOVER) const;
 
 private:
     string m_name;
