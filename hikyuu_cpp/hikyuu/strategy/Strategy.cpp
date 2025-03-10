@@ -145,6 +145,9 @@ void Strategy::start(bool autoRecieveSpot) {
 void Strategy::backtest(std::function<void(const Strategy&)>&& on_bar, const Datetime& start_date,
                         const Datetime& end_date, const KQuery::KType& ktype,
                         const string& ref_market) {
+    HKU_INFO("start backtesting ...");
+    SPEND_TIME(backtest);
+
     m_backtesting = true;
     _init();
 
@@ -152,7 +155,8 @@ void Strategy::backtest(std::function<void(const Strategy&)>&& on_bar, const Dat
 
     try {
         StockManager& sm = StockManager::instance();
-        auto dats = sm.getTradingCalendar(KQueryByDate(start_date, end_date, ktype), ref_market);
+        auto query = KQueryByDate(start_date, end_date, ktype);
+        auto dats = sm.getTradingCalendar(query, ref_market);
 
         m_backtesting_minutes = Minutes(KQuery::getKTypeInMin(ktype));
         auto dates = getDateRange(start_date, end_date);

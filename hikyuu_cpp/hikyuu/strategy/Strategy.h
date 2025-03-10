@@ -102,8 +102,8 @@ public:
      * @param ktype 回测周期
      */
     void backtest(std::function<void(const Strategy&)>&& on_bar, const Datetime& start_date,
-                  const Datetime& end_date, const KQuery::KType& ktype = KQuery::DAY,
-                  const string& ref_market = "SH");
+                  const Datetime& end_date = Null<Datetime>(),
+                  const KQuery::KType& ktype = KQuery::DAY, const string& ref_market = "SH");
 
     Datetime today() const;
     Datetime now() const;

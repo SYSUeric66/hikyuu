@@ -25,6 +25,7 @@ static bool check_pyfunction_arg_num(py::object& func, size_t arg_num) {
 }
 
 void export_Strategy(py::module& m) {
+    Datetime null_date;
     py::class_<Strategy, StrategyPtr>(m, "Strategy")
       .def(py::init<>())
       .def(py::init<const vector<string>&, const vector<KQuery::KType>&, const std::string&,
@@ -211,7 +212,7 @@ void export_Strategy(py::module& m) {
 
             stg.backtest(c_func, start_date, end_date, ktype, ref_market);
         },
-        py::arg("on_bar"), py::arg("start_date"), py::arg("end_date"),
+        py::arg("on_bar"), py::arg("start_date"), py::arg("end_date") = null_date,
         py::arg("ktype") = KQuery::DAY, py::arg("ref_market") = "SH", R"()")
 
       .def("today", &Strategy::today)
