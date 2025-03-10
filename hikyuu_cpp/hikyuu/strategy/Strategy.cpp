@@ -116,6 +116,10 @@ void Strategy::_init() {
 }
 
 void Strategy::start(bool autoRecieveSpot) {
+    HKU_WARN_IF(
+      !m_on_recieved_spot && !m_on_change && !m_run_daily_func && m_run_daily_at_funcs.empty(),
+      "No any process function is set!");
+
     _init();
 
     _runDailyAt();

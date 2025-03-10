@@ -59,7 +59,7 @@ public:
      * 每日开盘时间内，以 delta 为周期循环定时执行指定任务
      * @param func 待执行的任务
      * @param delta 间隔时间
-     * @param market 指定的市场
+     * @param market 指定的市场, 用于获取开/收盘时间
      * @param ignoreMarket 是否忽略市场时间限制，如为 true，则为定时循环不受开闭市时间限制
      */
     void runDaily(std::function<void(const Strategy&)>&& func, const TimeDelta& delta,

@@ -12,9 +12,17 @@
 #include <hikyuu/strategy/RunPortfolioInStrategy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/eval.h>
 
 namespace py = pybind11;
 using namespace hku;
+
+static bool check_pyfunction_arg_num(py::object& func, size_t arg_num) {
+    py::module_ inspect = py::module_::import("inspect");
+    py::object sig = inspect.attr("signature")(func);
+    py::object params = sig.attr("parameters");
+    return len(params) == arg_num;
+}
 
 void export_Strategy(py::module& m) {
     py::class_<Strategy, StrategyPtr>(m, "Strategy")
@@ -44,7 +52,29 @@ void export_Strategy(py::module& m) {
       .def_property_readonly("context", &Strategy::context, py::return_value_policy::copy,
                              "获取策略上下文")
 
-      .def("start", &Strategy::start, py::arg("auto_recieve_spot") = true, R"(start(self)
+      .def(
+        "start",
+        [](Strategy& self, bool auto_recieve_spot) {
+            // python 中在 start 之前，强制加入一个空函数，用于捕获 KeyboardInterrupt 来终止策略
+            py::object func = py::eval("lambda stg: None");
+            HKU_CHECK(check_pyfunction_arg_num(func, 1), "Number of parameters does not match!");
+            auto new_func = [=](const Strategy& stg) {
+                try {
+                    func(stg);
+                } catch (py::error_already_set& e) {
+                    if (e.matches(PyExc_KeyboardInterrupt)) {
+                        printf("KeyboardInterrupt\n");
+                        raise(SIGTERM);
+                    }
+                } catch (...) {
+                    // do nothing
+                }
+            };
+            self.runDaily(new_func, Seconds(1), "SH", true);
+
+            self.start();
+        },
+        py::arg("auto_recieve_spot") = true, R"(start(self)
 
     启动策略执行，请在完成相关回调设置后执行。
 
@@ -54,6 +84,7 @@ void export_Strategy(py::module& m) {
         "on_change",
         [](Strategy& self, py::object func) {
             HKU_CHECK(py::hasattr(func, "__call__"), "func is not callable!");
+            HKU_CHECK(check_pyfunction_arg_num(func, 3), "Number of parameters does not match!");
             py::object c_func = func.attr("__call__");
             auto new_func = [=](const Strategy& stg, const Stock& stk, const SpotRecord& spot) {
                 try {
@@ -75,12 +106,13 @@ void export_Strategy(py::module& m) {
            
     设置证券数据更新回调通知
 
-    :param func: 一个可调用的对象如普通函数，需接收 stock 和 ktype 参数)")
+    :param func: 一个可调用的对象如普通函数, func(stg: Strategy, stock: Stock, spot: SpotRecord)")
 
       .def(
         "on_received_spot",
         [](Strategy& self, py::object func) {
             HKU_CHECK(py::hasattr(func, "__call__"), "func is not callable!");
+            HKU_CHECK(check_pyfunction_arg_num(func, 2), "Number of parameters does not match!");
             py::object c_func = func.attr("__call__");
             auto new_func = [=](const Strategy& stg, Datetime revTime) {
                 try {
@@ -102,13 +134,14 @@ void export_Strategy(py::module& m) {
 
     设置证券数据更新通知回调
 
-    :param func: 可调用对象如普通函数，没有参数)")
+    :param func: 可调用对象如普通函数, func(stg: Strategy, revTime: Datetime))")
 
       .def(
         "run_daily",
-        [](Strategy* self, py::object func, const TimeDelta& time, std::string market,
+        [](Strategy& self, py::object func, const TimeDelta& time, std::string market,
            bool ignore_market) {
             HKU_CHECK(py::hasattr(func, "__call__"), "func is not callable!");
+            HKU_CHECK(check_pyfunction_arg_num(func, 1), "Number of parameters does not match!");
             py::object c_func = func.attr("__call__");
             auto new_func = [=](const Strategy& stg) {
                 try {
@@ -124,7 +157,7 @@ void export_Strategy(py::module& m) {
                     HKU_ERROR("Unknown error!");
                 }
             };
-            self->runDaily(new_func, time, market, ignore_market);
+            self.runDaily(new_func, time, market, ignore_market);
         },
         py::arg("func"), py::arg("time"), py::arg("market") = "SH",
         py::arg("ignore_market") = false, R"(run_daily(self, func)
@@ -132,15 +165,16 @@ void export_Strategy(py::module& m) {
     设置日内循环执行回调。如果忽略市场开闭市，则自启动时刻开始按间隔时间循环，
     否则第一次执行时将开盘时间对齐时间间隔，且在非开市时间停止执行。
 
-    :param func: 可调用对象如普通函数，没有参数
+    :param func: 可调用对象如普通函数，func(stg: Strategy)
     :param TimeDelta time: 间隔时间，如间隔3秒：TimeDelta(0, 0, 0, 3) 或 Seconds(3)
     :param str market: 使用哪个市场的开闭市时间
     :param ignore_market: 忽略市场开闭市时间)")
 
       .def(
         "run_daily_at",
-        [](Strategy* self, py::object func, const TimeDelta& time, bool ignore_holiday) {
+        [](Strategy& self, py::object func, const TimeDelta& time, bool ignore_holiday) {
             HKU_CHECK(py::hasattr(func, "__call__"), "func is not callable!");
+            HKU_CHECK(check_pyfunction_arg_num(func, 1), "Number of parameters does not match!");
             py::object c_func = func.attr("__call__");
             auto new_func = [=](const Strategy& stg) {
                 try {
@@ -156,14 +190,14 @@ void export_Strategy(py::module& m) {
                     HKU_ERROR("Unknown error!");
                 }
             };
-            self->runDailyAt(new_func, time, ignore_holiday);
+            self.runDailyAt(new_func, time, ignore_holiday);
         },
         py::arg("func"), py::arg("time"), py::arg("ignore_holiday") = true,
         R"(run_daily_at(self, func)
 
     设置每日定点执行回调
 
-    :param func: 可调用对象如普通函数，没有参数
+    :param func: 可调用对象如普通函数，func(stg: Strategy)
     :param TimeDelta time: 执行时刻，如每日15点：TimeDelta(0, 15)
     :param ignore_holiday: 节假日不执行)");
 
