@@ -412,7 +412,7 @@ template <>
 class hash<hku::Datetime> {
 public:
     size_t operator()(hku::Datetime const &d) const noexcept {
-        return d.ticks();  // or use boost::hash_combine
+        return std::hash<uint64_t>()(d.ticks());
     }
 };
 

@@ -93,6 +93,7 @@ void export_Datetime(py::module& m) {
       .def_static("today", &Datetime::today, "\n获取当前的日期")
       .def_static("from_hex", &Datetime::fromHex, "\n兼容oracle用后7个字节表示的datetime")
 
+      .def(py::hash(py::self))
       .def(py::self == py::self)
       .def(py::self != py::self)
       .def(py::self >= py::self)
