@@ -29,16 +29,16 @@ static void changed(const Strategy& stg, const Stock& stk, const SpotRecord& spo
 
 static void changed2(const Strategy& stg, const Stock& stk, const SpotRecord& spot) {
     if (stk.market_code() == "SZ000001") {
-        HKU_INFO("strategy 2 process sz000001");
+        HKU_INFO("{} | process sz000001", stg.name());
     }
 }
 
 static void my_process1(const Strategy& stg) {
-    HKU_INFO("{}", getStock("sh000001"));
+    HKU_INFO("{} | {}", stg.name(), getStock("sh000001"));
 }
 
 static void my_process2(const Strategy& stg) {
-    HKU_INFO("run at time: {} {}", stg.now(), getStock("sh000001").name());
+    HKU_INFO("{} | run at time: {} {}", stg.name(), stg.now(), getStock("sh000001").name());
 }
 
 int main(int argc, char* argv[]) {
@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
     // 注意：同一进程内的所有 strategy 共享的是同一个上下文！！！
     StrategyContext context({"sh000001", "sz000001"}, {KQuery::DAY});
 
-    Strategy stg(context, "test");
+    Strategy stg(context, "test-stg-1");
 
     // stock 数据变化接收，通常用于调测，直接一般不需要
     stg.onChange(changed);
@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
     stg.runDailyAt(my_process2, Datetime::now() - Datetime::today() + Seconds(10), false);
 
     auto t = std::thread([context]() {
-        Strategy stg2(context, "stratege2");
+        Strategy stg2(context, "test-stg-2");
         stg2.onChange(changed2);
         stg2.start();
     });

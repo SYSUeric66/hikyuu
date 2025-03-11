@@ -126,12 +126,15 @@ private:
     std::function<void(const Strategy&, const Datetime&)> m_on_recieved_spot;
     std::function<void(const Strategy&, const Stock&, const SpotRecord& spot)> m_on_change;
 
-    std::function<void()> m_run_daily_func;
-    TimeDelta m_run_daily_delta;
-    string m_run_daily_market;
-    bool m_ignoreMarket{false};
+    struct RunDailyAt {
+        std::function<void()> func;
+        TimeDelta delta;
+        string market;
+        bool ignoreMarket{false};
+    };
+    std::forward_list<RunDailyAt> m_run_daily_at_list;
 
-    std::map<TimeDelta, std::function<void()>> m_run_daily_at_funcs;
+    std::unordered_map<TimeDelta, std::function<void()>> m_run_daily_at_funcs;
 
 private:
     void _initParam();
