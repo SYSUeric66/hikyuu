@@ -156,12 +156,13 @@ void Strategy::backtest(std::function<void(const Strategy&)>&& on_bar, const Dat
     auto process = std::move(on_bar);
 
     try {
+        m_backtesting_minutes = Minutes(KQuery::getKTypeInMin(ktype));
+
         StockManager& sm = StockManager::instance();
         auto query = KQueryByDate(start_date, end_date, ktype);
-        auto dats = sm.getTradingCalendar(query, ref_market);
+        auto dates = sm.getTradingCalendar(query, ref_market);
+        // auto dates = getDateRange(start_date, end_date);
 
-        m_backtesting_minutes = Minutes(KQuery::getKTypeInMin(ktype));
-        auto dates = getDateRange(start_date, end_date);
         for (const auto& date : dates) {
             if (!ms_keep_running) {
                 break;
@@ -169,6 +170,7 @@ void Strategy::backtest(std::function<void(const Strategy&)>&& on_bar, const Dat
             m_backtesting_now = date;
             process(*this);
         }
+
     } catch (const std::exception& e) {
         CLS_ERROR("{}", e.what());
     } catch (...) {
