@@ -204,15 +204,16 @@ void export_Strategy(py::module& m) {
 
       .def(
         "backtest",
-        [](Strategy& stg, py::object on_bar, const Datetime& start_date, const Datetime& end_date,
-           const KQuery::KType& ktype = KQuery::DAY, const string& ref_market = "SH") {
+        [](Strategy& stg, py::object on_bar, const TradeManagerPtr& tm, const Datetime& start_date,
+           const Datetime& end_date, const KQuery::KType& ktype = KQuery::DAY,
+           const string& ref_market = "SH") {
             HKU_CHECK(py::hasattr(on_bar, "__call__"), "func is not callable!");
             HKU_CHECK(check_pyfunction_arg_num(on_bar, 1), "Number of parameters does not match!");
             py::object c_func = on_bar.attr("__call__");
 
-            stg.backtest(c_func, start_date, end_date, ktype, ref_market);
+            stg.backtest(c_func, tm, start_date, end_date, ktype, ref_market);
         },
-        py::arg("on_bar"), py::arg("start_date"), py::arg("end_date") = null_date,
+        py::arg("on_bar"), py::arg("tm"), py::arg("start_date"), py::arg("end_date") = null_date,
         py::arg("ktype") = KQuery::DAY, py::arg("ref_market") = "SH", R"()")
 
       .def("today", &Strategy::today)

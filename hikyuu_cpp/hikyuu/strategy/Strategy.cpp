@@ -144,89 +144,6 @@ void Strategy::start(bool autoRecieveSpot) {
     _startEventLoop();
 }
 
-void Strategy::backtest(std::function<void(const Strategy&)>&& on_bar, const Datetime& start_date,
-                        const Datetime& end_date, const KQuery::KType& ktype,
-                        const string& ref_market) {
-    HKU_INFO("start backtesting ...");
-    SPEND_TIME(backtest);
-
-    m_backtesting = true;
-    _init();
-
-    auto process = std::move(on_bar);
-
-    try {
-        m_backtesting_minutes = Minutes(KQuery::getKTypeInMin(ktype));
-
-        StockManager& sm = StockManager::instance();
-        auto query = KQueryByDate(start_date, end_date, ktype);
-        auto dates = sm.getTradingCalendar(query, ref_market);
-        // auto dates = getDateRange(start_date, end_date);
-
-        for (const auto& date : dates) {
-            if (!ms_keep_running) {
-                break;
-            }
-            m_backtesting_now = date;
-            process(*this);
-        }
-
-    } catch (const std::exception& e) {
-        CLS_ERROR("{}", e.what());
-    } catch (...) {
-        CLS_ERROR("Unknown exception!");
-    }
-
-    m_backtesting_now = Null<Datetime>();
-    m_backtesting = false;
-}
-
-Datetime Strategy::today() const {
-    return m_backtesting ? m_backtesting_now.startOfDay() : Datetime::today();
-}
-
-Datetime Strategy::now() const {
-    return m_backtesting ? m_backtesting_now : Datetime::now();
-}
-
-Datetime Strategy::nextDatetime() const {
-    return m_backtesting ? m_backtesting_now + m_backtesting_minutes : Null<Datetime>();
-}
-
-KData Strategy::getKData(const Stock& stk, const Datetime& start_date, const Datetime& end_date,
-                         const KQuery::KType& ktype, KQuery::RecoverType recover_type) const {
-    KData ret;
-    if (!m_backtesting) {
-        ret = stk.getKData(KQueryByDate(start_date, end_date, ktype, recover_type));
-        return ret;
-    }
-
-    Datetime next_date = m_backtesting_now + m_backtesting_minutes;
-    if (end_date.isNull() || end_date > next_date) {
-        ret = stk.getKData(KQueryByDate(start_date, next_date, ktype, recover_type));
-    } else {
-        ret = stk.getKData(KQueryByDate(start_date, end_date, ktype, recover_type));
-    }
-    return ret;
-}
-
-KData Strategy::getLastKData(const Stock& stk, size_t lastnum, const KQuery::KType& ktype,
-                             KQuery::RecoverType recover_type) const {
-    KData ret;
-    KQuery query = KQueryByDate(Datetime::min(), nextDatetime(), ktype);
-    size_t out_start = 0, out_end = 0;
-    HKU_IF_RETURN(!stk.getIndexRange(query, out_start, out_end), ret);
-
-    int64_t startidx = 0, endidx = 0;
-    endidx = out_end;
-    int64_t num = static_cast<int64_t>(lastnum);
-    startidx = (endidx > num) ? endidx - num : out_start;
-
-    query = KQueryByIndex(startidx, endidx, ktype, recover_type);
-    ret = stk.getKData(query);
-    return ret;
-}
-
 void Strategy::onChange(
   std::function<void(const Strategy&, const Stock&, const SpotRecord& spot)>&& changeFunc) {
     HKU_CHECK(changeFunc, "Invalid changeFunc!");
@@ -426,6 +343,160 @@ void Strategy::_startEventLoop() {
             }
         }
     }
+}
+
+void Strategy::backtest(std::function<void(const Strategy&)>&& on_bar, const TradeManagerPtr& tm,
+                        const Datetime& start_date, const Datetime& end_date,
+                        const KQuery::KType& ktype, const string& ref_market, int mode) {
+    HKU_CHECK(tm, "tm is null!");
+    HKU_INFO("start backtesting ...");
+    SPEND_TIME(backtest);
+
+    m_backtesting_mode = mode;
+    m_backtesting_ktype = ktype;
+
+    // 启动测试时赋值, 测试完成后恢复
+    auto old_tm = m_tm;
+    m_tm = tm;
+
+    m_backtesting = true;
+    _init();
+
+    auto process = std::move(on_bar);
+
+    try {
+        m_backtesting_minutes = Minutes(KQuery::getKTypeInMin(ktype));
+
+        StockManager& sm = StockManager::instance();
+        auto query = KQueryByDate(start_date, end_date, ktype);
+        m_backtesting_datetimes = sm.getTradingCalendar(query, ref_market);
+        // auto dates = getDateRange(start_date, end_date);
+
+        for (size_t i = 0, total = m_backtesting_datetimes.size(); i < total; ++i) {
+            if (!ms_keep_running) {
+                break;
+            }
+            m_backtesting_now = m_backtesting_datetimes[i];
+            m_backtesting_idx = i;
+            process(*this);
+        }
+
+    } catch (const std::exception& e) {
+        CLS_ERROR("{}", e.what());
+    } catch (...) {
+        CLS_ERROR("Unknown exception!");
+    }
+
+    m_backtesting_datetimes.clear();
+    m_backtesting_idx = 0;
+    m_tm = old_tm;
+    m_backtesting_now = Null<Datetime>();
+    m_backtesting = false;
+}
+
+Datetime Strategy::today() const {
+    return m_backtesting ? m_backtesting_now.startOfDay() : Datetime::today();
+}
+
+Datetime Strategy::now() const {
+    return m_backtesting ? m_backtesting_now : Datetime::now();
+}
+
+Datetime Strategy::nextDatetime() const {
+    return m_backtesting ? m_backtesting_now + m_backtesting_minutes : Null<Datetime>();
+}
+
+KData Strategy::getKData(const Stock& stk, const Datetime& start_date, const Datetime& end_date,
+                         const KQuery::KType& ktype, KQuery::RecoverType recover_type) const {
+    KData ret;
+    if (!m_backtesting) {
+        ret = stk.getKData(KQueryByDate(start_date, end_date, ktype, recover_type));
+        return ret;
+    }
+
+    Datetime next_date = m_backtesting_now + m_backtesting_minutes;
+    if (end_date.isNull() || end_date > next_date) {
+        ret = stk.getKData(KQueryByDate(start_date, next_date, ktype, recover_type));
+    } else {
+        ret = stk.getKData(KQueryByDate(start_date, end_date, ktype, recover_type));
+    }
+    return ret;
+}
+
+KData Strategy::getLastKData(const Stock& stk, size_t lastnum, const KQuery::KType& ktype,
+                             KQuery::RecoverType recover_type) const {
+    KData ret;
+    KQuery query = KQueryByDate(Datetime::min(), nextDatetime(), ktype);
+    size_t out_start = 0, out_end = 0;
+    HKU_IF_RETURN(!stk.getIndexRange(query, out_start, out_end), ret);
+
+    int64_t startidx = 0, endidx = 0;
+    endidx = out_end;
+    int64_t num = static_cast<int64_t>(lastnum);
+    startidx = (endidx > num) ? endidx - num : out_start;
+
+    query = KQueryByIndex(startidx, endidx, ktype, recover_type);
+    ret = stk.getKData(query);
+    return ret;
+}
+
+TradeRecord Strategy::buy(const Stock& stk, price_t price, double num, double stoploss,
+                          double goal_price, SystemPart part_from) {
+    HKU_ASSERT(m_tm);
+
+    TradeRecord ret;
+
+    // 非回测模式
+    if (!m_backtesting) {
+        ret = m_tm->buy(Datetime::now(), stk, price, num, stoploss, goal_price, price, part_from);
+        return ret;
+    }
+
+    // 回测模式
+    if (m_backtesting_mode == 0) {
+        // bar 收盘价
+        ret = m_tm->buy(m_backtesting_now, stk, price, num, stoploss, goal_price, price, part_from);
+    } else {
+        // TODO: 补充移滑价差
+        // 尝试取下一bar的数据
+        HKU_IF_RETURN(m_backtesting_idx + 2 >= m_backtesting_datetimes.size(), ret);
+        auto start_date = m_backtesting_datetimes[m_backtesting_idx + 1];
+        Datetime end_date = m_backtesting_datetimes[m_backtesting_idx + 2];
+        auto k = stk.getKData(KQueryByDate(start_date, end_date, m_backtesting_ktype));
+        HKU_INFO_IF_RETURN(k.empty() || k[0].datetime != start_date, ret, "");
+        ret = m_tm->buy(start_date, stk, price, num, stoploss, goal_price, price, part_from);
+    }
+    return ret;
+}
+
+TradeRecord Strategy::sell(const Stock& stk, price_t price, double num, price_t stoploss,
+                           price_t goal_price, SystemPart part_from) {
+    HKU_ASSERT(m_tm);
+
+    TradeRecord ret;
+
+    // 非回测模式
+    if (!m_backtesting) {
+        ret = m_tm->sell(Datetime::now(), stk, price, num, stoploss, goal_price, price, part_from);
+        return ret;
+    }
+
+    // 回测模式
+    if (m_backtesting_mode == 0) {
+        // bar 收盘价
+        ret =
+          m_tm->sell(m_backtesting_now, stk, price, num, stoploss, goal_price, price, part_from);
+    } else {
+        // TODO: 补充移滑价差
+        // 尝试取下一bar的数据
+        HKU_IF_RETURN(m_backtesting_idx + 2 >= m_backtesting_datetimes.size(), ret);
+        auto start_date = m_backtesting_datetimes[m_backtesting_idx + 1];
+        Datetime end_date = m_backtesting_datetimes[m_backtesting_idx + 2];
+        auto k = stk.getKData(KQueryByDate(start_date, end_date, m_backtesting_ktype));
+        HKU_INFO_IF_RETURN(k.empty() || k[0].datetime != start_date, ret, "");
+        ret = m_tm->sell(start_date, stk, price, num, stoploss, goal_price, price, part_from);
+    }
+    return ret;
 }
 
 void HKU_API runInStrategy(const SYSPtr& sys, const Stock& stk, const KQuery& query,

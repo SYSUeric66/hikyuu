@@ -101,9 +101,10 @@ public:
      * @param on_bar 按指定周期被执行的回调函数
      * @param ktype 回测周期
      */
-    void backtest(std::function<void(const Strategy&)>&& on_bar, const Datetime& start_date,
-                  const Datetime& end_date = Null<Datetime>(),
-                  const KQuery::KType& ktype = KQuery::DAY, const string& ref_market = "SH");
+    void backtest(std::function<void(const Strategy&)>&& on_bar, const TradeManagerPtr& tm,
+                  const Datetime& start_date, const Datetime& end_date = Null<Datetime>(),
+                  const KQuery::KType& ktype = KQuery::DAY, const string& ref_market = "SH",
+                  int mode = 0);
 
     Datetime today() const;
     Datetime now() const;
@@ -118,6 +119,20 @@ public:
 
     KData getLastKData(const Stock& stk, size_t lastnum, const KQuery::KType& ktype,
                        KQuery::RecoverType recover_type = KQuery::NO_RECOVER) const;
+
+    TradeRecord buy(const Stock& stk, price_t price, double num, double stoploss = 0.0,
+                    double goal_price = 0.0, SystemPart part_from = SystemPart::PART_SIGNAL);
+
+    TradeRecord sell(const Stock& stk, price_t price, double num, price_t stoploss = 0.0,
+                     price_t goal_price = 0.0, SystemPart from = SystemPart::PART_SIGNAL);
+
+    TradeManagerPtr getTM() const noexcept {
+        return m_tm;
+    }
+
+    void setTM(const TradeManagerPtr& tm) noexcept {
+        m_tm = tm;
+    }
 
 private:
     string m_name;
@@ -150,9 +165,14 @@ private:
     typedef FuncWrapper event_type;
     ThreadSafeQueue<event_type> m_event_queue;  // 消息队列
 
-    bool m_backtesting{false};
     Datetime m_backtesting_now;
     TimeDelta m_backtesting_minutes;
+    KQuery::KType m_backtesting_ktype;
+    TradeManagerPtr m_tm;
+    DatetimeList m_backtesting_datetimes;
+    size_t m_backtesting_idx{0};
+    int m_backtesting_mode{0};  // 0: 当前bar收盘价执行买卖操作；1: 下一bar开盘价执行买卖操作;
+    bool m_backtesting{false};
 
 private:
     /** 先消息队列提交任务后返回的对应 future 的类型 */
