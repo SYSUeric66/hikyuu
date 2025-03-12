@@ -455,7 +455,13 @@ TradeRecord Strategy::buy(const Stock& stk, price_t price, double num, double st
     // 回测模式
     if (m_backtesting_mode == 0) {
         // bar 收盘价
-        ret = m_tm->buy(m_backtesting_now, stk, price, num, stoploss, goal_price, price, part_from);
+        HKU_IF_RETURN(m_backtesting_idx + 1 >= m_backtesting_datetimes.size(), ret);
+        auto start_date = m_backtesting_now;
+        Datetime end_date = m_backtesting_datetimes[m_backtesting_idx + 1];
+        auto k = stk.getKData(KQueryByDate(start_date, end_date, m_backtesting_ktype));
+        HKU_IF_RETURN(k.empty() || k[0].datetime != start_date, ret);
+        ret = m_tm->buy(m_backtesting_now, stk, k[0].closePrice, num, stoploss, goal_price, price,
+                        part_from);
     } else {
         // TODO: 补充移滑价差
         // 尝试取下一bar的数据
@@ -464,7 +470,8 @@ TradeRecord Strategy::buy(const Stock& stk, price_t price, double num, double st
         Datetime end_date = m_backtesting_datetimes[m_backtesting_idx + 2];
         auto k = stk.getKData(KQueryByDate(start_date, end_date, m_backtesting_ktype));
         HKU_INFO_IF_RETURN(k.empty() || k[0].datetime != start_date, ret, "");
-        ret = m_tm->buy(start_date, stk, price, num, stoploss, goal_price, price, part_from);
+        ret =
+          m_tm->buy(start_date, stk, k[0].openPrice, num, stoploss, goal_price, price, part_from);
     }
     return ret;
 }
@@ -484,8 +491,13 @@ TradeRecord Strategy::sell(const Stock& stk, price_t price, double num, price_t 
     // 回测模式
     if (m_backtesting_mode == 0) {
         // bar 收盘价
-        ret =
-          m_tm->sell(m_backtesting_now, stk, price, num, stoploss, goal_price, price, part_from);
+        HKU_IF_RETURN(m_backtesting_idx + 1 >= m_backtesting_datetimes.size(), ret);
+        auto start_date = m_backtesting_now;
+        Datetime end_date = m_backtesting_datetimes[m_backtesting_idx + 1];
+        auto k = stk.getKData(KQueryByDate(start_date, end_date, m_backtesting_ktype));
+        HKU_IF_RETURN(k.empty() || k[0].datetime != start_date, ret);
+        ret = m_tm->sell(m_backtesting_now, stk, k[0].closePrice, num, stoploss, goal_price, price,
+                         part_from);
     } else {
         // TODO: 补充移滑价差
         // 尝试取下一bar的数据
@@ -493,8 +505,9 @@ TradeRecord Strategy::sell(const Stock& stk, price_t price, double num, price_t 
         auto start_date = m_backtesting_datetimes[m_backtesting_idx + 1];
         Datetime end_date = m_backtesting_datetimes[m_backtesting_idx + 2];
         auto k = stk.getKData(KQueryByDate(start_date, end_date, m_backtesting_ktype));
-        HKU_INFO_IF_RETURN(k.empty() || k[0].datetime != start_date, ret, "");
-        ret = m_tm->sell(start_date, stk, price, num, stoploss, goal_price, price, part_from);
+        HKU_IF_RETURN(k.empty() || k[0].datetime != start_date, ret);
+        ret =
+          m_tm->sell(start_date, stk, k[0].openPrice, num, stoploss, goal_price, price, part_from);
     }
     return ret;
 }
